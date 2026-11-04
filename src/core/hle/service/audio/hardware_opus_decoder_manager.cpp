@@ -7,24 +7,73 @@
 #include "core/hle/service/audio/hardware_opus_decoder.h"
 #include "core/hle/service/audio/hardware_opus_decoder_manager.h"
 #include "core/hle/service/cmif_serialization.h"
+#include "core/hle/service/kernel_helpers.h"
+#include "core/hle/kernel/k_event.h"
 
 namespace Service::Audio {
 
 using namespace AudioCore::OpusDecoder;
 
 // Switch 2's nn::codec::hwacod shim opens this sub-session with hwopus 100 before sizing
-// or opening decoders. Its commands are not known yet, so they fall back to the auto stub,
-// which logs each command id the game sends.
-class IHardwareAudioCodecSession final : public ServiceFramework<IHardwareAudioCodecSession> {
+// or opening decoders. Command ids come from Star Fox's requests; unknown ones fall back to
+// the auto stub, which logs each command id the game sends.
+class IHardwareAudioCodecManager final : public ServiceFramework<IHardwareAudioCodecManager> {
 public:
-    explicit IHardwareAudioCodecSession(Core::System& system_)
-        : ServiceFramework{system_, "hwopus:hwacod"} {
+    explicit IHardwareAudioCodecManager(Core::System& system_)
+        : ServiceFramework{system_, "hwopus:hwacod:manager"},
+          service_context{system_, "hwopus:hwacod:manager"} {
         // clang-format off
         static const FunctionInfo functions[] = {
             {0, nullptr, "Unknown0"},
         };
         // clang-format on
         RegisterHandlers(functions);
+        event = service_context.CreateEvent("hwopus:hwacod:manager:Event");
+    }
+    ~IHardwareAudioCodecManager() override {
+        service_context.CloseEvent(event);
+    }
+
+    Kernel::KReadableEvent& GetEvent() {
+        return event->GetReadableEvent();
+    }
+
+private:
+    KernelHelpers::ServiceContext service_context;
+    Kernel::KEvent* event{};
+};
+
+class IHardwareAudioCodecSession final : public ServiceFramework<IHardwareAudioCodecSession> {
+public:
+    explicit IHardwareAudioCodecSession(Core::System& system_)
+        : ServiceFramework{system_, "hwopus:hwacod"} {
+        // clang-format off
+        static const FunctionInfo functions[] = {
+            {0, nullptr, "ValidateParameter (guessed)"},
+            {1, D<&IHardwareAudioCodecSession::GetWorkBufferSize>, "GetWorkBufferSize (guessed)"},
+            {10, D<&IHardwareAudioCodecSession::OpenManager>, "OpenManager (guessed)"},
+        };
+        // clang-format on
+        RegisterHandlers(functions);
+    }
+
+private:
+    // The shim adds this to its own client-side sizes, then shares the buffer with OpenManager.
+    Result GetWorkBufferSize(Out<u32> out_size, u32 instance_count) {
+        LOG_WARNING(Service_Audio, "(STUBBED) hwacod 1 instance_count={}", instance_count);
+        *out_size = 0x20000;
+        R_SUCCEED();
+    }
+
+    // Manager::Initialize keeps the object for its instance calls and waits on the event.
+    Result OpenManager(Out<SharedPointer<IHardwareAudioCodecManager>> out_manager,
+                       OutCopyHandle<Kernel::KReadableEvent> out_event, Out<u64> out_value) {
+        LOG_WARNING(Service_Audio, "(STUBBED) hwacod 10, returning a manager");
+        auto manager = std::make_shared<IHardwareAudioCodecManager>(system);
+        *out_event = &manager->GetEvent();
+        *out_value = 0;
+        *out_manager = manager;
+        R_SUCCEED();
     }
 };
 
