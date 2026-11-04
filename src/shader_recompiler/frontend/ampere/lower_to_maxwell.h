@@ -824,14 +824,17 @@ inline LoweredProgram LowerToMaxwellWith(std::span<const Instruction> code, u32 
                  (u64{source} << 20) | (u64{15} << 39));
             break;
         }
-        case 0xab9: case 0xabb: { // ULDC U32/U64, direct or indexed.
+        case 0xab9: case 0xabb: { // ULDC U8/S8/U16/S16/U32/U64, direct or indexed.
             const u32 uniform_dest = insn.Bits(16, 8), index_reg = insn.Bits(24, 8);
+            // Width as Maxwell LDC's size field: 0-3 the 8 and 16-bit forms (Star Fox's present
+            // pass loads a U16 for I2F.U16), 4 = 32 and 5 = 64 bits. Offsets align to the size.
             const u32 width = insn.Bits(73, 3);
+            const u32 width_align = width >= 4 ? 4U : width >= 2 ? 2U : 1U;
             const u32 target = uniform_register(uniform_dest);
             const u32 index_target = opcode == 0xabb ? uniform_register(index_reg) : 255U;
-            if (target == ~0U || target == 255 || (width != 4 && width != 5) ||
+            if (target == ~0U || target == 255 || width > 5 ||
                 (width == 5 && ((uniform_dest & 1) || uniform_register(uniform_dest + 1) != target + 1)) ||
-                bank() >= 18 || insn.Bits(38, 16) % 4 || insn.Bits(62, 2) ||
+                bank() >= 18 || insn.Bits(38, 16) % width_align || insn.Bits(62, 2) ||
                 (insn.words[2] & ~0xe00U) != (opcode == 0xab9 ? 0U : 0x08000000U) ||
                 index_target == ~0U)
                 return fail(index, "native uniform constant load mode");
