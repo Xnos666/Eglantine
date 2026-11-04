@@ -12,6 +12,22 @@ namespace Service::Audio {
 
 using namespace AudioCore::OpusDecoder;
 
+// Switch 2's nn::codec::hwacod shim opens this sub-session with hwopus 100 before sizing
+// or opening decoders. Its commands are not known yet, so they fall back to the auto stub,
+// which logs each command id the game sends.
+class IHardwareAudioCodecSession final : public ServiceFramework<IHardwareAudioCodecSession> {
+public:
+    explicit IHardwareAudioCodecSession(Core::System& system_)
+        : ServiceFramework{system_, "hwopus:hwacod"} {
+        // clang-format off
+        static const FunctionInfo functions[] = {
+            {0, nullptr, "Unknown0"},
+        };
+        // clang-format on
+        RegisterHandlers(functions);
+    }
+};
+
 IHardwareOpusDecoderManager::IHardwareOpusDecoderManager(Core::System& system_)
     : ServiceFramework{system_, "hwopus"}, system{system_}, impl{system} {
     // clang-format off
@@ -26,6 +42,7 @@ IHardwareOpusDecoderManager::IHardwareOpusDecoderManager(Core::System& system_)
         {7, D<&IHardwareOpusDecoderManager::GetWorkBufferSizeForMultiStreamEx>, "GetWorkBufferSizeForMultiStreamEx"},
         {8, D<&IHardwareOpusDecoderManager::GetWorkBufferSizeExEx>, "GetWorkBufferSizeExEx"},
         {9, D<&IHardwareOpusDecoderManager::GetWorkBufferSizeForMultiStreamExEx>, "GetWorkBufferSizeForMultiStreamExEx"},
+        {100, D<&IHardwareOpusDecoderManager::OpenHardwareAudioCodecSession>, "OpenHardwareAudioCodecSession (guessed)"},
     };
     // clang-format on
     RegisterHandlers(functions);
@@ -153,6 +170,13 @@ Result IHardwareOpusDecoderManager::GetWorkBufferSizeForMultiStreamExEx(
     Out<u32> out_size, InLargeData<OpusMultiStreamParametersEx, BufferAttr_HipcPointer> params) {
     R_TRY(impl.GetWorkBufferSizeForMultiStreamExEx(*params, *out_size));
     LOG_DEBUG(Service_Audio, "size {:#x}", *out_size);
+    R_SUCCEED();
+}
+
+Result IHardwareOpusDecoderManager::OpenHardwareAudioCodecSession(
+    Out<SharedPointer<IHardwareAudioCodecSession>> out_session) {
+    LOG_WARNING(Service_Audio, "(STUBBED) hwopus 100, returning a hwacod session");
+    *out_session = std::make_shared<IHardwareAudioCodecSession>(system);
     R_SUCCEED();
 }
 
