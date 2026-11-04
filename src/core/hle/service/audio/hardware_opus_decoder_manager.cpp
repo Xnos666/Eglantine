@@ -66,8 +66,9 @@ private:
     }
 
     // Manager::Initialize keeps the object for its instance calls and waits on the event.
-    Result OpenManager(Out<SharedPointer<IHardwareAudioCodecManager>> out_manager,
-                       OutCopyHandle<Kernel::KReadableEvent> out_event, Out<u64> out_value) {
+    Result OpenManager(Out<u64> out_value,
+                       Out<SharedPointer<IHardwareAudioCodecManager>> out_manager,
+                       OutCopyHandle<Kernel::KReadableEvent> out_event) {
         LOG_WARNING(Service_Audio, "(STUBBED) hwacod 10, returning a manager");
         auto manager = std::make_shared<IHardwareAudioCodecManager>(system);
         *out_event = &manager->GetEvent();
